@@ -20,6 +20,8 @@ ESP8266HTTPUpdateServer httpUpdater;
 
 String message_buffer = "";
 
+WiFiClient pushClient;
+
 void handleStatus()
 {
 	message_buffer.remove(0);

@@ -222,15 +222,55 @@ void readMetrics()
 		}
 	}
 
-	WiFiClient client;
+	/* ---------------------------------------------------------------------- */
 
-	if (client.connect(IPAddress(192, 168, 2, 91), 10001))
-	{
-		getMetricsNew(index_nextvalue);
-		client.println(message_buffer);
-		client.flush();
-		client.stop();
+	if (pushClient.connected()) {
+		message_buffer.remove(0);
+
+		for(uint8_t index_metric = 0; index_metric < METRIC_COUNT; index_metric++)
+		{
+			struct Metric metric = metrics[index_metric];
+
+			if (!metric.showInMain)
+				continue;
+
+			uint8_t phasecount = strlen(metric.phases);
+
+			for(uint8_t index_phase = 0; index_phase < phasecount; index_phase++)
+			{
+				int32_t value_int = metric.values[index_phase][index_nextvalue];
+				double value = value_int * metric.factor;
+
+				if(metric.type == LSB_COMPLEMENT || metric.type == LSB_UNSIGNED)
+					value /= (1 << 8);
+
+				message_buffer += metric.name;
+				if (phasecount > 1)
+				{
+					message_buffer += "[";
+					message_buffer.concat(metric.phases[index_phase]);
+					message_buffer += "]";
+				}
+				message_buffer += "=" + String(value, metric.decimals) + " ";
+			}
+		}
+
+		message_buffer += "\n";
+
+		pushClient.print(message_buffer);
+		pushClient.flush();
 	}
+
+	/* ---------------------------------------------------------------------- */
+
+	// WiFiClient client;
+	// if (client.connect(IPAddress(192, 168, 2, 91), 10001))
+	// {
+	// 	getMetricsNew(index_nextvalue);
+	// 	client.println(message_buffer);
+	// 	client.flush();
+	// 	client.stop();
+	// }
 
 	if(++index_nextvalue >= setting_sample_count)
 		index_nextvalue = 0;

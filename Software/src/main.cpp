@@ -71,6 +71,7 @@ void loop(void)
 {
 	static unsigned long last_spi_read_time = millis();
 	static unsigned long last_uptime_update = millis();
+	static unsigned long last_pushClient_attempt = 0;
 
 	unsigned long loop_start = micros();
 
@@ -89,6 +90,11 @@ void loop(void)
 	{
 		uptime_seconds++;
 		last_uptime_update += 1000;
+	}
+
+	if ((!pushClient.connected()) && ((now - last_pushClient_attempt) > 10000)) {
+		pushClient.connect(IPAddress(192, 168, 2, 186), 11111);
+		last_pushClient_attempt = now;
 	}
 
 	unsigned long loop_duration_ul = micros() - loop_start;
