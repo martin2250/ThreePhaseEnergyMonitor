@@ -64,6 +64,8 @@ void setup(void)
 
 	initWeb();
 
+	pushClient.setTimeout(500);
+
 	Serial.println("setup finished");
 }
 
