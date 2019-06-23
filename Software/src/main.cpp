@@ -95,7 +95,7 @@ void loop(void)
 	}
 
 	if ((!pushClient.connected()) && ((now - last_pushClient_attempt) > 10000)) {
-		pushClient.connect(IPAddress(192, 168, 2, 186), 11111);
+		pushClient.connect(IPAddress(192, 168, 2, 91), 11111);
 		last_pushClient_attempt = now;
 	}
 
