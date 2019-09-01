@@ -7,6 +7,7 @@ void handleAllMetrics();
 void readMetrics();
 void initMetrics();
 void resetMetrics();
+void startMetricSocket();
 
 extern int64_t total_energy[];
 

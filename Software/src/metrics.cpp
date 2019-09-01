@@ -31,21 +31,21 @@ struct Metric
 };
 
 struct Metric metrics[] = {
-	{"voltage_rms", "ABC", UrmsA, 1./100, LSB_UNSIGNED, 2, true},
+	{"voltage", "ABC", UrmsA, 1./100, LSB_UNSIGNED, 2, true},
 
-	{"current_rms", "T", IrmsN0, 1./1000, NOLSB_UNSIGNED, 3, true},
-	{"current_rms", "ABC", IrmsA, 1./1000, LSB_UNSIGNED, 5, true},
+	{"current", "T", IrmsN0, 1./1000, NOLSB_UNSIGNED, 3, true},
+	{"current", "ABC", IrmsA, 1./1000, LSB_UNSIGNED, 5, true},
 
-	{"power_active", "T", PmeanT, 4./1000, LSB_COMPLEMENT, 5, true},
-	{"power_active", "ABC", PmeanA, 1./1000, LSB_COMPLEMENT, 5, true},
+	{"power", "T", PmeanT, 4., LSB_COMPLEMENT, 2, true},
+	{"power", "ABC", PmeanA, 1., LSB_COMPLEMENT, 2, true},
 
-	{"power_reactive", "T", QmeanT, 4./1000, LSB_COMPLEMENT, 5, false},
-	{"power_reactive", "ABC", QmeanA, 1./1000, LSB_COMPLEMENT, 5, false},
+	{"power_reactive", "T", QmeanT, 4./1000, LSB_COMPLEMENT, 2, false},
+	{"power_reactive", "ABC", QmeanA, 1./1000, LSB_COMPLEMENT, 2, false},
 
-	{"power_apparent", "T", SmeanT, 4./1000, LSB_COMPLEMENT, 5, false},
-	{"power_apparent", "ABC", SmeanA, 1./1000, LSB_COMPLEMENT, 5, false},
+	{"power_apparent", "T", SmeanT, 4./1000, LSB_COMPLEMENT, 2, false},
+	{"power_apparent", "ABC", SmeanA, 1./1000, LSB_COMPLEMENT, 2, false},
 
-	{"power_factor", "TABC", PFmeanT, 1./1000, NOLSB_SIGNED, 3, true},
+	{"power_factor", "TABC", PFmeanT, 1./1000, NOLSB_SIGNED, 3, false},
 
 	{"phase_angle_voltage", "ABC", UangleA, 1./10, NOLSB_SIGNED, 2, false},
 	{"phase_angle_current", "ABC", PAngleA, 1./10, NOLSB_SIGNED, 2, false},
@@ -57,6 +57,92 @@ struct Metric metrics[] = {
 	{"temperature", "T", Temp, 1., NOLSB_SIGNED, 0, false}
 };
 #define METRIC_COUNT (sizeof(metrics)/sizeof(metrics[0]))
+
+void startMetricSocket()
+{
+	pushClient.println("SERIES name:power loc:main");
+	pushClient.print("COLUMNS ");
+	
+	for(uint8_t index_metric = 0; index_metric < METRIC_COUNT; index_metric++)
+	{
+		struct Metric metric = metrics[index_metric];
+
+		if (!metric.showInMain)
+			continue;
+
+		uint8_t phasecount = strlen(metric.phases);
+
+		for(uint8_t index_phase = 0; index_phase < phasecount; index_phase++)
+		{
+			if (index_metric != 0 || index_phase != 0)
+				pushClient.print("|");
+			pushClient.print("name:");
+			pushClient.print(metrics[index_metric].name);
+			pushClient.print(" phase:");
+			pushClient.print(metrics[index_metric].phases[index_phase]);
+		}
+	}
+
+	pushClient.print("|name:energy phase:T");
+	pushClient.print("|name:energy phase:A");
+	pushClient.print("|name:energy phase:B");
+	pushClient.print("|name:energy phase:C");
+
+	pushClient.println();
+}
+
+void sendMetricsSocket(uint8_t index)
+{
+	message_buffer.remove(0);
+	message_buffer += "POINT";
+
+	for(uint8_t index_metric = 0; index_metric < METRIC_COUNT; index_metric++)
+	{
+		struct Metric metric = metrics[index_metric];
+
+		if (!metric.showInMain)
+			continue;
+
+		uint8_t phasecount = strlen(metric.phases);
+
+		for(uint8_t index_phase = 0; index_phase < phasecount; index_phase++)
+		{
+			int32_t value_int = metric.values[index_phase][index];
+			double value = value_int * metric.factor;
+
+			if(metric.type == LSB_COMPLEMENT || metric.type == LSB_UNSIGNED)
+				value /= (1 << 8);
+
+			message_buffer += " ";
+			message_buffer += String(value, metric.decimals);
+		}
+	}
+
+	const char *phases = "TABC";
+
+	for(uint8_t i = 0; i < 4; i++)
+	{
+		message_buffer += " ";
+
+		if(setting_energy_total[i] < 0)
+			message_buffer += "-";
+
+		int64_t abs_total_energy = abs(setting_energy_total[i]);
+		message_buffer += int64_to_string(abs_total_energy / 10000) + ".";
+
+		String fractionalstr = String((uint16_t)(abs_total_energy % 10000));
+
+		for(uint8_t i = fractionalstr.length(); i < 4; i++)
+			message_buffer += "0";
+
+		message_buffer += fractionalstr;
+	}
+
+	message_buffer += "\n";
+
+	pushClient.print(message_buffer);
+	pushClient.flush();
+}
 
 // last time taken to read all metrics from the ATM90E36A (in microseconds)
 unsigned long lastMetricReadTime = 0;
@@ -225,40 +311,7 @@ void readMetrics()
 	/* ---------------------------------------------------------------------- */
 
 	if (pushClient.connected()) {
-		message_buffer.remove(0);
-
-		for(uint8_t index_metric = 0; index_metric < METRIC_COUNT; index_metric++)
-		{
-			struct Metric metric = metrics[index_metric];
-
-			if (!metric.showInMain)
-				continue;
-
-			uint8_t phasecount = strlen(metric.phases);
-
-			for(uint8_t index_phase = 0; index_phase < phasecount; index_phase++)
-			{
-				int32_t value_int = metric.values[index_phase][index_nextvalue];
-				double value = value_int * metric.factor;
-
-				if(metric.type == LSB_COMPLEMENT || metric.type == LSB_UNSIGNED)
-					value /= (1 << 8);
-
-				message_buffer += metric.name;
-				if (phasecount > 1)
-				{
-					message_buffer += "[";
-					message_buffer.concat(metric.phases[index_phase]);
-					message_buffer += "]";
-				}
-				message_buffer += "=" + String(value, metric.decimals) + " ";
-			}
-		}
-
-		message_buffer += "\n";
-
-		pushClient.print(message_buffer);
-		pushClient.flush();
+		sendMetricsSocket(index_nextvalue);
 	}
 
 	/* ---------------------------------------------------------------------- */

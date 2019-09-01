@@ -95,7 +95,10 @@ void loop(void)
 	}
 
 	if ((!pushClient.connected()) && ((now - last_pushClient_attempt) > 10000)) {
-		pushClient.connect(IPAddress(192, 168, 2, 91), 11111);
+		if(pushClient.connect(IPAddress(192, 168, 2, 91), 8001))
+		{
+			startMetricSocket();
+		}
 		last_pushClient_attempt = now;
 	}
 
