@@ -62,7 +62,7 @@ void startMetricSocket()
 {
 	pushClient.println("SERIES name:power loc:main");
 	pushClient.print("COLUMNS ");
-	
+
 	for(uint8_t index_metric = 0; index_metric < METRIC_COUNT; index_metric++)
 	{
 		struct Metric metric = metrics[index_metric];
@@ -86,9 +86,13 @@ void startMetricSocket()
 	pushClient.print("|name:energy phase:T");
 	pushClient.print("|name:energy phase:A");
 	pushClient.print("|name:energy phase:B");
-	pushClient.print("|name:energy phase:C");
 
-	pushClient.println();
+	auto len = pushClient.println("|name:energy phase:C");
+
+	if (len == 0)
+	{
+		pushClient.stop();
+	}
 }
 
 void sendMetricsSocket(uint8_t index)
