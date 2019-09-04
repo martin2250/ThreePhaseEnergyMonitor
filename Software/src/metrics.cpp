@@ -1,4 +1,5 @@
 #include "Arduino.h"
+#include <WiFiUdp.h>
 #include "ATM90E36.h"
 #include "metrics.h"
 #include "fram.h"
@@ -57,48 +58,50 @@ struct Metric metrics[] = {
 	{"temperature", "T", Temp, 1., NOLSB_SIGNED, 0, false}
 };
 #define METRIC_COUNT (sizeof(metrics)/sizeof(metrics[0]))
+//
+// void startMetricSocket()
+// {
+// 	pushClient.println("SERIES name:power loc:main");
+// 	pushClient.print("COLUMNS ");
+//
+// 	for(uint8_t index_metric = 0; index_metric < METRIC_COUNT; index_metric++)
+// 	{
+// 		struct Metric metric = metrics[index_metric];
+//
+// 		if (!metric.showInMain)
+// 			continue;
+//
+// 		uint8_t phasecount = strlen(metric.phases);
+//
+// 		for(uint8_t index_phase = 0; index_phase < phasecount; index_phase++)
+// 		{
+// 			if (index_metric != 0 || index_phase != 0)
+// 				pushClient.print("|");
+// 			pushClient.print("name:");
+// 			pushClient.print(metrics[index_metric].name);
+// 			pushClient.print(" phase:");
+// 			pushClient.print(metrics[index_metric].phases[index_phase]);
+// 		}
+// 	}
+//
+// 	pushClient.print("|name:energy phase:T");
+// 	pushClient.print("|name:energy phase:A");
+// 	pushClient.print("|name:energy phase:B");
+//
+// 	auto len = pushClient.println("|name:energy phase:C");
+//
+// 	if (len == 0)
+// 	{
+// 		pushClient.stop();
+// 	}
+// }
 
-void startMetricSocket()
-{
-	pushClient.println("SERIES name:power loc:main");
-	pushClient.print("COLUMNS ");
-
-	for(uint8_t index_metric = 0; index_metric < METRIC_COUNT; index_metric++)
-	{
-		struct Metric metric = metrics[index_metric];
-
-		if (!metric.showInMain)
-			continue;
-
-		uint8_t phasecount = strlen(metric.phases);
-
-		for(uint8_t index_phase = 0; index_phase < phasecount; index_phase++)
-		{
-			if (index_metric != 0 || index_phase != 0)
-				pushClient.print("|");
-			pushClient.print("name:");
-			pushClient.print(metrics[index_metric].name);
-			pushClient.print(" phase:");
-			pushClient.print(metrics[index_metric].phases[index_phase]);
-		}
-	}
-
-	pushClient.print("|name:energy phase:T");
-	pushClient.print("|name:energy phase:A");
-	pushClient.print("|name:energy phase:B");
-
-	auto len = pushClient.println("|name:energy phase:C");
-
-	if (len == 0)
-	{
-		pushClient.stop();
-	}
-}
+WiFiUDP pushUdp;
 
 void sendMetricsSocket(uint8_t index)
 {
 	message_buffer.remove(0);
-	message_buffer += "POINT";
+	message_buffer += "name:power loc:main|";
 
 	for(uint8_t index_metric = 0; index_metric < METRIC_COUNT; index_metric++)
 	{
@@ -117,8 +120,15 @@ void sendMetricsSocket(uint8_t index)
 			if(metric.type == LSB_COMPLEMENT || metric.type == LSB_UNSIGNED)
 				value /= (1 << 8);
 
+			message_buffer += "name:";
+			message_buffer += metrics[index_metric].name;
+
+			message_buffer += " phase:";
+			message_buffer += metrics[index_metric].phases[index_phase];
+
 			message_buffer += " ";
 			message_buffer += String(value, metric.decimals);
+			message_buffer += "|";
 		}
 	}
 
@@ -126,6 +136,8 @@ void sendMetricsSocket(uint8_t index)
 
 	for(uint8_t i = 0; i < 4; i++)
 	{
+		message_buffer += "name:energy phase:";
+		message_buffer += phases[i];
 		message_buffer += " ";
 
 		if(setting_energy_total[i] < 0)
@@ -140,12 +152,14 @@ void sendMetricsSocket(uint8_t index)
 			message_buffer += "0";
 
 		message_buffer += fractionalstr;
+		message_buffer += "|";
 	}
 
 	message_buffer += "\n";
 
-	pushClient.print(message_buffer);
-	pushClient.flush();
+	pushUdp.beginPacket(IPAddress(192, 168, 2, 91), 8001);
+	pushUdp.write(message_buffer.c_str(), message_buffer.length());
+	pushUdp.endPacket();
 }
 
 // last time taken to read all metrics from the ATM90E36A (in microseconds)
@@ -168,6 +182,8 @@ void initMetrics()
 	}
 
 	resetMetrics();
+
+	pushUdp.begin(6666);
 }
 
 void resetMetrics()
@@ -314,9 +330,9 @@ void readMetrics()
 
 	/* ---------------------------------------------------------------------- */
 
-	if (pushClient.connected()) {
-		sendMetricsSocket(index_nextvalue);
-	}
+	// if (pushClient.connected()) {
+	sendMetricsSocket(index_nextvalue);
+	// }
 
 	/* ---------------------------------------------------------------------- */
 

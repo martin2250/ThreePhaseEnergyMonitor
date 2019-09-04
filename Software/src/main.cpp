@@ -64,7 +64,7 @@ void setup(void)
 
 	initWeb();
 
-	pushClient.setTimeout(500);
+	// pushClient.setTimeout(500);
 
 	Serial.println("setup finished");
 }
@@ -94,13 +94,13 @@ void loop(void)
 		last_uptime_update += 1000;
 	}
 
-	if ((!pushClient.connected()) && ((now - last_pushClient_attempt) > 10000)) {
-		if(pushClient.connect(IPAddress(192, 168, 2, 91), 8001))
-		{
-			startMetricSocket();
-		}
-		last_pushClient_attempt = now;
-	}
+	// if ((!pushClient.connected()) && ((now - last_pushClient_attempt) > 10000)) {
+	// 	if(pushClient.connect(IPAddress(192, 168, 2, 91), 8001))
+	// 	{
+	// 		startMetricSocket();
+	// 	}
+	// 	last_pushClient_attempt = now;
+	// }
 
 	unsigned long loop_duration_ul = micros() - loop_start;
 
